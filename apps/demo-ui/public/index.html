@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrivacyGuard | Safe AI Conversations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L4 5V11C4 16 7.5 19.7 12 21C16.5 19.7 20 16 20 11V5L12 2Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M9 11.5L11 13.5L15 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <h1>PrivacyGuard</h1>
+      </div>
+
+      <button id="newChat" class="new-chat-btn">
+        <span aria-hidden="true">+</span> New chat
+      </button>
+
+      <button id="openDb" class="db-btn">
+        <span aria-hidden="true">🛡</span> Privacy database
+      </button>
+
+      <div class="history-section">
+        <p class="history-label">Chat history</p>
+        <div class="history-list" id="historyList">
+          <p class="history-empty">Your past conversations will appear here.</p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="chat-main">
+      <header class="chat-header">
+        <div>
+          <h2 id="chatTitle">New chat</h2>
+          <p class="tagline">Your personal details are protected automatically, every message.</p>
+        </div>
+      </header>
+
+      <div class="chat-thread" id="chatThread">
+        <div class="empty-state" id="emptyState">
+          <h3>Start a conversation</h3>
+          <p>
+            Type a message below, just like you would to any AI assistant. If it contains personal
+            details &mdash; like your name, email, phone number, or other private information &mdash;
+            PrivacyGuard will automatically hide them before your message is sent, and restore them
+            in the reply only for you. Keep chatting &mdash; PrivacyGuard remembers the conversation.
+          </p>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <textarea id="prompt" rows="2" placeholder="Message PrivacyGuard… e.g. Hi, I'm Jane Doe (jane.doe@example.com). My SSN is 123-45-6789."></textarea>
+        <button id="send">
+          <span class="btn-label">Send</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p id="status" role="status"></p>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="dbModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dbModalTitle">
+      <div class="modal-header">
+        <div>
+          <h2 id="dbModalTitle">Your privacy database</h2>
+          <p class="card-subtitle">
+            Add specific names, emails, or other values you want PrivacyGuard to always hide
+            &mdash; checked directly against this list, no AI or pattern guessing involved.
+          </p>
+        </div>
+        <button class="modal-close" id="closeDb" aria-label="Close">✕</button>
+      </div>
+
+      <form id="dbAddForm" class="db-add-form">
+        <input type="text" id="dbValue" placeholder="e.g. Jane Doe, jane.doe@example.com…" autocomplete="off" />
+        <select id="dbType"></select>
+        <button type="submit">Add</button>
+      </form>
+
+      <div class="db-list" id="dbList">
+        <p class="entity-empty">Your privacy database is empty.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

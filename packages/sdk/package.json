@@ -1,0 +1,39 @@
+{
+  "name": "@privacyguard/sdk",
+  "version": "0.1.0",
+  "description": "Drop-in privacy-preserving SDK clients for OpenAI, Anthropic, and Gemini that sanitize requests and reconstruct responses using @privacyguard/core",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@privacyguard/core": "0.1.0"
+  },
+  "peerDependencies": {
+    "openai": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@google/generative-ai": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true },
+    "@anthropic-ai/sdk": { "optional": true },
+    "@google/generative-ai": { "optional": true }
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.2",
+    "rimraf": "^6.0.1",
+    "openai": "^4.77.0",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@google/generative-ai": "^0.21.0"
+  }
+}
