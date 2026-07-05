@@ -1,5 +1,6 @@
 const promptEl = document.getElementById("prompt");
 const sendBtn = document.getElementById("send");
+const modelSelectEl = document.getElementById("modelSelect");
 const statusEl = document.getElementById("status");
 const chatThread = document.getElementById("chatThread");
 const emptyState = document.getElementById("emptyState");
@@ -13,6 +14,8 @@ const dbAddForm = document.getElementById("dbAddForm");
 const dbValueEl = document.getElementById("dbValue");
 const dbTypeEl = document.getElementById("dbType");
 const dbListEl = document.getElementById("dbList");
+const userNameEl = document.getElementById("userName");
+const logoutBtn = document.getElementById("logoutBtn");
 
 let currentSessionId = null;
 
@@ -89,12 +92,34 @@ dbModal.addEventListener("click", (e) => {
   if (e.target === dbModal) closeDbModal();
 });
 dbAddForm.addEventListener("submit", handleDbAdd);
+logoutBtn.addEventListener("click", handleLogout);
 
 init();
 
 async function init() {
+  // Guard: redirect to login if not authenticated.
+  try {
+    const res = await fetch("/api/auth/me");
+    if (res.status === 401) {
+      window.location.replace("/login.html");
+      return;
+    }
+    if (res.ok) {
+      const { username } = await res.json();
+      userNameEl.textContent = username;
+    }
+  } catch {
+    window.location.replace("/login.html");
+    return;
+  }
+
   populateTypeOptions();
   await refreshHistory();
+}
+
+async function handleLogout() {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.replace("/login.html");
 }
 
 function populateTypeOptions() {
@@ -139,9 +164,13 @@ async function sendMessage() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, sessionId: currentSessionId }),
+      body: JSON.stringify({ message, sessionId: currentSessionId, model: modelSelectEl.value }),
     });
 
+    if (res.status === 401) {
+      window.location.replace("/login.html");
+      return;
+    }
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || "Something went wrong. Please try again.");

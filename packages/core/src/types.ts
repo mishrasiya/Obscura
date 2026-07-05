@@ -15,10 +15,19 @@ export enum EntityType {
   EMAIL = "EMAIL",
   PHONE_NUMBER = "PHONE_NUMBER",
   SSN = "SSN",
+  TAX_ID = "TAX_ID",                               // EIN / TIN / ITIN
+  SALARY = "SALARY",                               // Annual / base salary or wage
+  TAX_FORM = "TAX_FORM",                           // W-2 / 1099 wage forms
   CREDIT_CARD = "CREDIT_CARD",
+  CVV = "CVV",                                      // Card security code
+  CREDIT_CARD_EXPIRATION = "CREDIT_CARD_EXPIRATION",
+  CREDIT_SCORE = "CREDIT_SCORE",                    // FICO / credit score
   IP_ADDRESS = "IP_ADDRESS",
   IBAN = "IBAN",
   BANK_ACCOUNT = "BANK_ACCOUNT",
+  ROUTING_NUMBER = "ROUTING_NUMBER",                // ABA / ACH routing number
+  SWIFT_CODE = "SWIFT_CODE",                        // SWIFT / BIC bank code
+  CRYPTO_WALLET = "CRYPTO_WALLET",                  // BTC / ETH wallet address
   PASSPORT_NUMBER = "PASSPORT_NUMBER",
   DRIVERS_LICENSE = "DRIVERS_LICENSE",
   DATE_OF_BIRTH = "DATE_OF_BIRTH",
@@ -28,17 +37,20 @@ export enum EntityType {
   LOCATION = "LOCATION",
   USERNAME = "USERNAME",
   MAC_ADDRESS = "MAC_ADDRESS",
+  IMEI = "IMEI",                                    // Mobile device IMEI
   VIN = "VIN",
   URL = "URL",
   GEOLOCATION = "GEOLOCATION",
   FAX_NUMBER = "FAX_NUMBER",
-  CREDIT_CARD_EXPIRATION = "CREDIT_CARD_EXPIRATION",
   ZIP_CODE = "ZIP_CODE",
   LICENSE_PLATE = "LICENSE_PLATE",
 
   // ---- PHI ----
   MEDICAL_RECORD_NUMBER = "MEDICAL_RECORD_NUMBER",
   ICD_CODE = "ICD_CODE",
+  CPT_CODE = "CPT_CODE",                            // CPT procedure code
+  SNOMED_CODE = "SNOMED_CODE",                      // SNOMED CT concept code
+  RXCUI_CODE = "RXCUI_CODE",                        // RxNorm concept identifier
   NPI_NUMBER = "NPI_NUMBER",
   HEALTH_INSURANCE_ID = "HEALTH_INSURANCE_ID",
   DEA_NUMBER = "DEA_NUMBER",
@@ -46,6 +58,8 @@ export enum EntityType {
   DATE_OF_SERVICE = "DATE_OF_SERVICE",
   PATIENT_ID = "PATIENT_ID",
   PROVIDER_LICENSE_NUMBER = "PROVIDER_LICENSE_NUMBER",
+  MEDICAL_DEVICE_SERIAL = "MEDICAL_DEVICE_SERIAL",  // Implant / pacemaker serial
+  CLINICAL_NOTE = "CLINICAL_NOTE",                  // Clinical narrative / SOAP note section
 
   // ---- Secrets ----
   AWS_ACCESS_KEY = "AWS_ACCESS_KEY",
@@ -54,13 +68,18 @@ export enum EntityType {
   AZURE_CLIENT_SECRET = "AZURE_CLIENT_SECRET",
   GITHUB_TOKEN = "GITHUB_TOKEN",
   SLACK_TOKEN = "SLACK_TOKEN",
+  SLACK_WEBHOOK = "SLACK_WEBHOOK",                  // Slack incoming webhook URL
+  STRIPE_API_KEY = "STRIPE_API_KEY",                // Stripe sk_ / pk_ / rk_ key
+  PAYPAL_SECRET = "PAYPAL_SECRET",                  // PayPal client secret
   OPENAI_API_KEY = "OPENAI_API_KEY",
   ANTHROPIC_API_KEY = "ANTHROPIC_API_KEY",
   JWT = "JWT",
   PRIVATE_KEY = "PRIVATE_KEY",
+  CRYPTO_PRIVATE_KEY = "CRYPTO_PRIVATE_KEY",        // Wallet seed phrase / hex key
   DB_CONNECTION_STRING = "DB_CONNECTION_STRING",
   GENERIC_API_KEY = "GENERIC_API_KEY",
   PASSWORD_ASSIGNMENT = "PASSWORD_ASSIGNMENT",
+  CUI_MARKING = "CUI_MARKING",                      // CUI / CONTROLLED UNCLASSIFIED INFORMATION
 }
 
 /** Maps each entity type to its broad data-protection category. */
@@ -68,10 +87,19 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.EMAIL]: "PII",
   [EntityType.PHONE_NUMBER]: "PII",
   [EntityType.SSN]: "PII",
+  [EntityType.TAX_ID]: "PII",
+  [EntityType.SALARY]: "PII",
+  [EntityType.TAX_FORM]: "PII",
   [EntityType.CREDIT_CARD]: "PII",
+  [EntityType.CVV]: "PII",
+  [EntityType.CREDIT_CARD_EXPIRATION]: "PII",
+  [EntityType.CREDIT_SCORE]: "PII",
   [EntityType.IP_ADDRESS]: "PII",
   [EntityType.IBAN]: "PII",
   [EntityType.BANK_ACCOUNT]: "PII",
+  [EntityType.ROUTING_NUMBER]: "PII",
+  [EntityType.SWIFT_CODE]: "PII",
+  [EntityType.CRYPTO_WALLET]: "PII",
   [EntityType.PASSPORT_NUMBER]: "PII",
   [EntityType.DRIVERS_LICENSE]: "PII",
   [EntityType.DATE_OF_BIRTH]: "PII",
@@ -81,16 +109,19 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.LOCATION]: "PII",
   [EntityType.USERNAME]: "PII",
   [EntityType.MAC_ADDRESS]: "PII",
+  [EntityType.IMEI]: "PII",
   [EntityType.VIN]: "PII",
   [EntityType.URL]: "PII",
   [EntityType.GEOLOCATION]: "PII",
   [EntityType.FAX_NUMBER]: "PII",
-  [EntityType.CREDIT_CARD_EXPIRATION]: "PII",
   [EntityType.ZIP_CODE]: "PII",
   [EntityType.LICENSE_PLATE]: "PII",
 
   [EntityType.MEDICAL_RECORD_NUMBER]: "PHI",
   [EntityType.ICD_CODE]: "PHI",
+  [EntityType.CPT_CODE]: "PHI",
+  [EntityType.SNOMED_CODE]: "PHI",
+  [EntityType.RXCUI_CODE]: "PHI",
   [EntityType.NPI_NUMBER]: "PHI",
   [EntityType.HEALTH_INSURANCE_ID]: "PHI",
   [EntityType.DEA_NUMBER]: "PHI",
@@ -98,6 +129,8 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.DATE_OF_SERVICE]: "PHI",
   [EntityType.PATIENT_ID]: "PHI",
   [EntityType.PROVIDER_LICENSE_NUMBER]: "PHI",
+  [EntityType.MEDICAL_DEVICE_SERIAL]: "PHI",
+  [EntityType.CLINICAL_NOTE]: "PHI",
 
   [EntityType.AWS_ACCESS_KEY]: "SECRET",
   [EntityType.AWS_SECRET_KEY]: "SECRET",
@@ -105,13 +138,18 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.AZURE_CLIENT_SECRET]: "SECRET",
   [EntityType.GITHUB_TOKEN]: "SECRET",
   [EntityType.SLACK_TOKEN]: "SECRET",
+  [EntityType.SLACK_WEBHOOK]: "SECRET",
+  [EntityType.STRIPE_API_KEY]: "SECRET",
+  [EntityType.PAYPAL_SECRET]: "SECRET",
   [EntityType.OPENAI_API_KEY]: "SECRET",
   [EntityType.ANTHROPIC_API_KEY]: "SECRET",
   [EntityType.JWT]: "SECRET",
   [EntityType.PRIVATE_KEY]: "SECRET",
+  [EntityType.CRYPTO_PRIVATE_KEY]: "SECRET",
   [EntityType.DB_CONNECTION_STRING]: "SECRET",
   [EntityType.GENERIC_API_KEY]: "SECRET",
   [EntityType.PASSWORD_ASSIGNMENT]: "SECRET",
+  [EntityType.CUI_MARKING]: "SECRET",
 };
 
 /**

@@ -36,6 +36,26 @@
           <p class="history-empty">Your past conversations will appear here.</p>
         </div>
       </div>
+
+      <div class="user-bar">
+        <div class="user-info">
+          <span class="user-avatar" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="user-name" id="userName">…</span>
+        </div>
+        <button id="logoutBtn" class="logout-btn" title="Sign out">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Sign out
+        </button>
+      </div>
     </aside>
 
     <main class="chat-main">
@@ -43,6 +63,15 @@
         <div>
           <h2 id="chatTitle">New chat</h2>
           <p class="tagline">Your personal details are protected automatically, every message.</p>
+        </div>
+        <div class="model-selector">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect">
+            <option value="claude-fable-5">Claude Fable 5</option>
+            <option value="claude-opus-4-8">Claude Opus 4.8</option>
+            <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+          </select>
         </div>
       </header>
 

@@ -3,30 +3,44 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import Anthropic from "@anthropic-ai/sdk";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
 import { Sanitizer, DEFAULT_POLICY, EntityType, MaskingStrategy } from "@privacyguard/core";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-const HISTORY_FILE = path.join(__dirname, "..", "data", "chat-history.json");
-const KNOWN_ENTITIES_FILE = path.join(__dirname, "..", "data", "known-entities.json");
+const DATA_DIR = path.join(__dirname, "..", "data");
+const USERS_FILE = path.join(DATA_DIR, "users.json");
+const JWT_SECRET = process.env.JWT_SECRET ?? "privacyguard-dev-secret-change-in-production";
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn("Warning: ANTHROPIC_API_KEY is not set. /api/chat will return an error until it is configured.");
 }
 
-const sanitizer = new Sanitizer({ knownEntitiesFile: KNOWN_ENTITIES_FILE });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface User {
+  id: string;
+  username: string;
+  passwordHash: string;
+  createdAt: number;
+}
+
+interface AuthPayload {
+  userId: string;
+  username: string;
+}
 
 interface ChatMessage {
   role: "user" | "assistant";
-  /** What the end user sees (original text for their own messages, reconstructed text for replies). */
   text: string;
-  /** What was actually exchanged with the LLM provider (masked prompt / raw masked reply). */
   maskedText: string;
-  /** Detected entities, only present on user messages. */
   entities?: Array<{ type: string; category: string; value: string; strategy: string; source: string }>;
   timestamp: number;
 }
@@ -39,54 +53,194 @@ interface ChatSession {
   messages: ChatMessage[];
 }
 
-let sessions: ChatSession[] = [];
-
-async function loadSessions(): Promise<void> {
-  try {
-    const raw = await fs.readFile(HISTORY_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.sessions)) sessions = parsed.sessions;
-  } catch {
-    sessions = [];
+// Extend Express Request with authenticated user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthPayload;
+    }
   }
 }
 
-async function saveSessions(): Promise<void> {
-  await fs.mkdir(path.dirname(HISTORY_FILE), { recursive: true });
-  await fs.writeFile(HISTORY_FILE, JSON.stringify({ sessions }, null, 2), "utf-8");
+// ── User storage ───────────────────────────────────────────────────────────
+
+let users: User[] = [];
+
+async function loadUsers(): Promise<void> {
+  try {
+    const raw = await fs.readFile(USERS_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) users = parsed;
+  } catch {
+    users = [];
+  }
 }
 
-const PRIVACY_SYSTEM_PROMPT = `Some parts of the user's messages have been replaced with placeholder tokens like [EMAIL_1], [SSN_1], [PERSON_NAME_1], [PATIENT_ID_1], or [REDACTED_AWS_ACCESS_KEY] by a privacy filter running before this conversation reaches you. This is expected, routine, and already handled — the user's real data is securely stored and will be restored on their end after you respond.
+async function saveUsers(): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
+}
 
-Treat each placeholder as a normal stand-in for a real value of that type (e.g. treat [PERSON_NAME_1] as a name, [SSN_1] as a number, [PATIENT_ID_1] as an identifier) and use it exactly as the user instructs, including in generated documents, forms, letters, or emails, and including repeating it verbatim as many times as needed.
+// ── Per-user data helpers ──────────────────────────────────────────────────
 
-Do not do any of the following based on a placeholder's type or name:
-- Refuse, warn about exposure/leakage, or tell the user to rotate/revoke/redact anything
-- Omit, drop, replace, or "clean up" a placeholder from your output because the underlying type (SSN, passport, financial account, medical record, biometric, etc.) is normally sensitive
-- Add disclaimers, caveats, or notes about why certain information was or wasn't included
-- Second-guess whether the user "should" be including that field in the requested output
+const historyFilePath = (userId: string) =>
+  path.join(DATA_DIR, `sessions-${userId}.json`);
 
-The data was never exposed to you and is already protected end-to-end — your job is only to complete the user's request normally, using every placeholder they reference exactly as given.`;
+const knownEntitiesFilePath = (userId: string) =>
+  path.join(DATA_DIR, `known-entities-${userId}.json`);
+
+// Lazy Sanitizer map — one instance per user
+const sanitizerMap = new Map<string, Sanitizer>();
+
+function getSanitizer(userId: string): Sanitizer {
+  if (!sanitizerMap.has(userId)) {
+    sanitizerMap.set(userId, new Sanitizer({ knownEntitiesFile: knownEntitiesFilePath(userId) }));
+  }
+  return sanitizerMap.get(userId)!;
+}
+
+// Lazy session cache — one array per user
+const sessionCache = new Map<string, ChatSession[]>();
+
+async function getSessionsForUser(userId: string): Promise<ChatSession[]> {
+  if (!sessionCache.has(userId)) {
+    try {
+      const raw = await fs.readFile(historyFilePath(userId), "utf-8");
+      const parsed = JSON.parse(raw);
+      sessionCache.set(userId, Array.isArray(parsed?.sessions) ? parsed.sessions : []);
+    } catch {
+      sessionCache.set(userId, []);
+    }
+  }
+  return sessionCache.get(userId)!;
+}
+
+async function saveSessionsForUser(userId: string): Promise<void> {
+  const sessions = sessionCache.get(userId) ?? [];
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(historyFilePath(userId), JSON.stringify({ sessions }, null, 2), "utf-8");
+}
+
+// ── Auth middleware ────────────────────────────────────────────────────────
+
+function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const token = req.cookies?.pgtoken as string | undefined;
+  if (!token) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  try {
+    req.user = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Session expired" });
+  }
+}
+
+// ── Privacy system prompt ──────────────────────────────────────────────────
+
+const PRIVACY_SYSTEM_PROMPT = `Every message you receive has already been processed by an enterprise privacy filter before reaching you. The filter scanned the original text and replaced every sensitive value with an opaque placeholder token. The real values are never transmitted to you — you only ever see the tokens.
+
+Placeholder tokens appear in two forms:
+- [TYPE_N] — a reversible token (e.g. [EMAIL_1], [ADDRESS_2]). The client will substitute the real value back into your response after you reply.
+- [REDACTED_TYPE] — a permanently removed value (e.g. [REDACTED_AWS_ACCESS_KEY]). Treat it as an opaque identifier whose contents are irrelevant to your task.
+
+Every token, regardless of its name, is just an abstract variable. Your job is identical to what it would be if the real values were present: complete the user's request, use every token exactly as written, include tokens verbatim wherever they belong in any document, form, email, table, or code you produce. Do not attempt to infer, reconstruct, or comment on what the original values might have been.
+
+Because no real data has reached you, there is nothing sensitive for you to protect, warn about, or refuse. Do not decline, add disclaimers, or alter your response based on what a token name suggests about the underlying data type. The privacy enforcement already happened upstream — your role is simply to complete the task.`;
 
 function makeTitle(message: string): string {
   const oneLine = message.replace(/\s+/g, " ").trim();
   return oneLine.length > 48 ? `${oneLine.slice(0, 48)}…` : oneLine || "New chat";
 }
 
+// ── Express app ────────────────────────────────────────────────────────────
+
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-app.post("/api/chat", async (req, res) => {
+// ── Auth routes ────────────────────────────────────────────────────────────
+
+app.post("/api/auth/register", async (req, res) => {
   try {
+    const username = String(req.body?.username ?? "").trim().toLowerCase();
+    const password = String(req.body?.password ?? "");
+
+    if (!username || username.length < 3)
+      return res.status(400).json({ error: "Username must be at least 3 characters." });
+    if (!/^[a-z0-9_-]+$/.test(username))
+      return res.status(400).json({ error: "Username may only contain letters, numbers, _ and -." });
+    if (!password || password.length < 8)
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    if (users.find((u) => u.username === username))
+      return res.status(409).json({ error: "That username is already taken." });
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user: User = { id: randomUUID(), username, passwordHash, createdAt: Date.now() };
+    users.push(user);
+    await saveUsers();
+
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+    res.cookie("pgtoken", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
+    res.json({ id: user.id, username: user.username });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Registration failed." });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const username = String(req.body?.username ?? "").trim().toLowerCase();
+    const password = String(req.body?.password ?? "");
+
+    const user = users.find((u) => u.username === username);
+    if (!user || !(await bcrypt.compare(password, user.passwordHash)))
+      return res.status(401).json({ error: "Invalid username or password." });
+
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+    res.cookie("pgtoken", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
+    res.json({ id: user.id, username: user.username });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Login failed." });
+  }
+});
+
+app.post("/api/auth/logout", (_req, res) => {
+  res.clearCookie("pgtoken");
+  res.json({ ok: true });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  res.json({ id: req.user!.userId, username: req.user!.username });
+});
+
+// ── Chat routes ────────────────────────────────────────────────────────────
+
+const ALLOWED_MODELS = new Set([
+  "claude-fable-5",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+]);
+
+app.post("/api/chat", requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.user!;
     const message = String(req.body?.message ?? "").trim();
     const requestedSessionId = req.body?.sessionId ? String(req.body.sessionId) : undefined;
-    if (!message) {
-      return res.status(400).json({ error: "message is required" });
-    }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const requestedModel = String(req.body?.model ?? "");
+    const model = ALLOWED_MODELS.has(requestedModel) ? requestedModel : "claude-sonnet-4-6";
+
+    if (!message) return res.status(400).json({ error: "message is required" });
+    if (!process.env.ANTHROPIC_API_KEY)
       return res.status(500).json({ error: "ANTHROPIC_API_KEY is not configured on the server" });
-    }
+
+    const sessions = await getSessionsForUser(userId);
+    const sanitizer = getSanitizer(userId);
 
     let session = requestedSessionId ? sessions.find((s) => s.id === requestedSessionId) : undefined;
     if (!session) {
@@ -100,12 +254,8 @@ app.post("/api/chat", async (req, res) => {
       sessions.unshift(session);
     }
 
-    // 1. Sanitize: detect and mask PII/PHI/secrets before anything leaves the process.
-    //    Reuse the session id as the vault requestId so token numbering and
-    //    reconstruction stay consistent across the whole conversation.
     const { requestId, sanitizedText, originalText, entities } = await sanitizer.sanitize(message, session.id);
 
-    // 2. Forward the full conversation so far (masked) plus the new masked message.
     const claudeMessages: Anthropic.MessageParam[] = session.messages.map((m) => ({
       role: m.role,
       content: m.maskedText,
@@ -113,7 +263,7 @@ app.post("/api/chat", async (req, res) => {
     claudeMessages.push({ role: "user", content: sanitizedText });
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 1024,
       system: PRIVACY_SYSTEM_PROMPT,
       messages: claudeMessages,
@@ -124,9 +274,6 @@ app.post("/api/chat", async (req, res) => {
       .map((block) => block.text)
       .join("\n");
 
-    // 3. Reconstruct: restore any reversible placeholders the model echoed back.
-    //    The vault keeps entries for the whole session, so tokens from earlier
-    //    turns that the model echoes back can still be resolved.
     const { reconstructedText } = await sanitizer.reconstruct(requestId, rawResponse);
 
     const entitiesWithStrategy = entities.map((entity) => ({
@@ -152,7 +299,7 @@ app.post("/api/chat", async (req, res) => {
       timestamp: now,
     });
     session.updatedAt = now;
-    await saveSessions();
+    await saveSessionsForUser(userId);
 
     res.json({
       sessionId: session.id,
@@ -168,63 +315,74 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.get("/api/sessions", (_req, res) => {
+app.get("/api/sessions", requireAuth, async (req, res) => {
+  const { userId } = req.user!;
+  const sessions = await getSessionsForUser(userId);
   const summaries = sessions
     .slice()
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((s) => ({ id: s.id, title: s.title, createdAt: s.createdAt, updatedAt: s.updatedAt, messageCount: s.messages.length }));
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+      messageCount: s.messages.length,
+    }));
   res.json(summaries);
 });
 
-app.get("/api/sessions/:id", (req, res) => {
+app.get("/api/sessions/:id", requireAuth, async (req, res) => {
+  const { userId } = req.user!;
+  const sessions = await getSessionsForUser(userId);
   const session = sessions.find((s) => s.id === req.params.id);
   if (!session) return res.status(404).json({ error: "Conversation not found" });
   res.json(session);
 });
 
-app.delete("/api/sessions/:id", async (req, res) => {
+app.delete("/api/sessions/:id", requireAuth, async (req, res) => {
+  const { userId } = req.user!;
+  const sessions = await getSessionsForUser(userId);
   const index = sessions.findIndex((s) => s.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: "Conversation not found" });
   sessions.splice(index, 1);
-  await sanitizer.clearSession(req.params.id);
-  await saveSessions();
+  await getSanitizer(userId).clearSession(req.params.id);
+  await saveSessionsForUser(userId);
   res.json({ ok: true });
 });
 
-app.get("/api/audit", (_req, res) => {
-  res.json(sanitizer.getAuditEvents());
+app.get("/api/audit", requireAuth, (req, res) => {
+  res.json(getSanitizer(req.user!.userId).getAuditEvents());
 });
 
-// ---------------------------------------------------------------------------
-// PII/PHI database: known values that are always redacted via exact lookup,
-// independent of the regex/NER detectors.
-// ---------------------------------------------------------------------------
+// ── Known entities (per user) ──────────────────────────────────────────────
 
-app.get("/api/known-entities", (_req, res) => {
-  res.json(sanitizer.getKnownEntities());
+app.get("/api/known-entities", requireAuth, (req, res) => {
+  res.json(getSanitizer(req.user!.userId).getKnownEntities());
 });
 
-app.post("/api/known-entities", (req, res) => {
+app.post("/api/known-entities", requireAuth, (req, res) => {
   const value = String(req.body?.value ?? "").trim();
   const type = String(req.body?.type ?? "").trim() as EntityType;
-  if (!value || !type || !(type in EntityType)) {
+  if (!value || !type || !(type in EntityType))
     return res.status(400).json({ error: "value and a valid type are required" });
-  }
-  res.json(sanitizer.addKnownEntities([{ value, type }]));
+  res.json(getSanitizer(req.user!.userId).addKnownEntities([{ value, type }]));
 });
 
-app.delete("/api/known-entities", (req, res) => {
+app.delete("/api/known-entities", requireAuth, (req, res) => {
   const value = String(req.body?.value ?? "").trim();
   const type = String(req.body?.type ?? "").trim() as EntityType;
-  if (!value || !type) {
-    return res.status(400).json({ error: "value and type are required" });
-  }
-  res.json(sanitizer.removeKnownEntity(value, type));
+  if (!value || !type) return res.status(400).json({ error: "value and type are required" });
+  res.json(getSanitizer(req.user!.userId).removeKnownEntity(value, type));
 });
+
+// ── Boot ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  await loadSessions();
-  await sanitizer.warmup();
+  await loadUsers();
+  // Pre-warm the detection pipeline so the first real request isn't slow.
+  const warmup = new Sanitizer({ knownEntitiesFile: path.join(DATA_DIR, ".warmup-entities.json") });
+  await warmup.warmup();
+
   app.listen(PORT, () => {
     console.log(`PrivacyGuard demo UI running at http://localhost:${PORT}`);
   });
