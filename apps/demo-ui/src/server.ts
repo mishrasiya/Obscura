@@ -250,7 +250,9 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     const sanitizer = getSanitizer(userId);
 
     let session = requestedSessionId ? sessions.find((s) => s.id === requestedSessionId) : undefined;
+    let isNewSession = false;
     if (!session) {
+      isNewSession = true;
       session = {
         id: randomUUID(),
         title: makeTitle(message),
@@ -269,20 +271,6 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     }));
     claudeMessages.push({ role: "user", content: sanitizedText });
 
-    const completion = await anthropic.messages.create({
-      model,
-      max_tokens: 1024,
-      system: PRIVACY_SYSTEM_PROMPT,
-      messages: claudeMessages,
-    });
-
-    const rawResponse = completion.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
-
-    const { reconstructedText } = await sanitizer.reconstruct(requestId, rawResponse);
-
     // Rich entities (incl. raw value) for the LIVE response only — never persisted.
     const entitiesWithStrategy = entities.map((entity) => ({
       type: entity.type as string,
@@ -300,9 +288,56 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       source,
     }));
 
+    // Stream the response as Server-Sent Events.
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+    const sse = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Send metadata first so the UI can show what was detected / what the
+    // provider sees immediately, before the reply streams in.
+    sse("meta", {
+      sessionId: session.id,
+      title: session.title,
+      isNewSession,
+      entities: entitiesWithStrategy,
+      sanitizedPrompt: sanitizedText,
+    });
+
+    const recon = await sanitizer.createStreamingReconstructor(requestId);
+    let rawResponse = "";
+    try {
+      const stream = anthropic.messages.stream({
+        model,
+        max_tokens: 1024,
+        system: PRIVACY_SYSTEM_PROMPT,
+        messages: claudeMessages,
+      });
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+          const piece = event.delta.text;
+          rawResponse += piece;
+          const safe = recon.push(piece); // reconstructed, safe to show
+          if (safe) sse("delta", { text: safe });
+        }
+      }
+      const tail = recon.flush();
+      if (tail) sse("delta", { text: tail });
+    } catch (streamErr) {
+      // Never echo request content back in errors.
+      console.error("stream error", streamErr instanceof Error ? streamErr.message : streamErr);
+      sse("error", { error: streamErr instanceof Error ? streamErr.message : "Upstream error" });
+      return res.end();
+    }
+
     const now = Date.now();
-    // Persist masked content only. originalText and reconstructedText (which
-    // contain real PII) are deliberately NOT stored.
+    // Persist masked content only. The raw prompt and reconstructed (real)
+    // reply are deliberately NOT stored.
     session.messages.push({
       role: "user",
       maskedText: sanitizedText,
@@ -317,16 +352,12 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     session.updatedAt = now;
     await saveSessionsForUser(userId);
 
-    res.json({
-      sessionId: session.id,
-      title: session.title,
-      entities: entitiesWithStrategy,
-      sanitizedPrompt: sanitizedText,
-      rawResponse,
-      reconstructedResponse: reconstructedText,
-    });
+    // Final event carries the masked raw reply (what the AI actually produced).
+    sse("done", { rawResponse });
+    res.end();
   } catch (err) {
     console.error(err);
+    if (res.headersSent) return res.end();
     res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });
   }
 });

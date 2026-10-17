@@ -9,10 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, and this changelog.
 - GitHub Actions CI: build + test across Node 20/22/24.
+- Streaming chat responses in the demo via Server-Sent Events, with incremental
+  reconstruction as tokens arrive.
+- `createStreamingReconstructor()` / `Sanitizer.createStreamingReconstructor()`
+  in `@obscura/core`, which safely reconstructs placeholder tokens even when
+  they are split across streaming chunk boundaries (+ unit tests).
 
 ### Changed
 - Completed the rename from "PrivacyGuard" to "Obscura" across all packages, the
   SDK client classes, and the demo (including the auth cookie `obscura_token`).
+- Demo no longer persists raw PII: `data/sessions-*.json` stores only masked
+  text and value-free entity metadata.
+- Renamed the internal `sanitizeBatch` boundary marker off the old "PG" prefix.
+
+### Fixed
+- `npm test` now reliably runs every test file; the previous unquoted
+  `src/**/*.test.ts` glob was expanded by the shell and silently skipped files.
 
 ### Deployment
 - Added a container image, Docker Compose stack with optional Caddy TLS, and an

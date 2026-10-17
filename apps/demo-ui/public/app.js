@@ -151,8 +151,9 @@ async function sendMessage() {
   if (!message) return;
 
   emptyState.hidden = true;
-  appendMessage({ role: "user", text: message });
+  const userWrapper = appendMessage({ role: "user", text: message });
   const pending = appendMessage({ role: "assistant", text: "Thinking…", pending: true });
+  const pendingBubble = pending.querySelector(".message-bubble");
 
   promptEl.value = "";
   sendBtn.disabled = true;
@@ -160,6 +161,7 @@ async function sendMessage() {
   statusEl.classList.remove("error");
   statusEl.textContent = "Checking your message and contacting the assistant…";
 
+  let started = false;
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
@@ -171,37 +173,81 @@ async function sendMessage() {
       window.location.replace("/login.html");
       return;
     }
-    const data = await res.json();
-    if (!res.ok) {
+
+    // Errors before the stream starts come back as plain JSON, not SSE.
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("text/event-stream")) {
+      const data = await res.json().catch(() => ({}));
       throw new Error(data.error || "Something went wrong. Please try again.");
     }
 
-    const isNewSession = !currentSessionId;
-    currentSessionId = data.sessionId;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let assistantText = "";
+    let streamError = null;
 
-    // Replace the "Thinking…" placeholder with the real reply + privacy details.
-    pending.remove();
-    appendMessage({
-      role: "assistant",
-      text: data.reconstructedResponse,
-      maskedText: data.rawResponse,
-    });
+    const handleEvent = (evt, data) => {
+      if (evt === "meta") {
+        currentSessionId = data.sessionId;
+        attachUserPrivacyDetails(userWrapper, {
+          entities: data.entities,
+          maskedText: data.sanitizedPrompt,
+        });
+        if (data.isNewSession) chatTitleEl.textContent = data.title;
+        statusEl.textContent = "";
+      } else if (evt === "delta") {
+        if (!started) {
+          started = true;
+          pending.classList.remove("pending");
+          pendingBubble.textContent = "";
+        }
+        assistantText += data.text;
+        pendingBubble.textContent = assistantText;
+        chatThread.scrollTop = chatThread.scrollHeight;
+      } else if (evt === "error") {
+        streamError = data.error || "Upstream error";
+      } else if (evt === "done") {
+        attachAssistantPrivacyDetails(pending, { maskedText: data.rawResponse });
+      }
+    };
 
-    // Attach privacy details to the user message we already rendered.
-    attachUserPrivacyDetails(chatThread.lastElementChild?.previousElementSibling, {
-      entities: data.entities,
-      maskedText: data.sanitizedPrompt,
-    });
-
-    if (isNewSession) {
-      chatTitleEl.textContent = data.title;
+    // Parse the SSE frames (separated by a blank line).
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        let evt = "message";
+        const dataLines = [];
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) evt = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+        }
+        if (!dataLines.length) continue;
+        let parsed;
+        try {
+          parsed = JSON.parse(dataLines.join("\n"));
+        } catch {
+          continue;
+        }
+        handleEvent(evt, parsed);
+      }
     }
 
-    statusEl.textContent = "";
+    if (streamError) throw new Error(streamError);
+    if (!started) {
+      pending.classList.remove("pending");
+      pendingBubble.textContent = "(no response)";
+    }
+
     await refreshHistory();
     setActiveHistoryItem(currentSessionId);
   } catch (err) {
-    pending.remove();
+    if (!started) pending.remove();
     statusEl.classList.add("error");
     statusEl.textContent = err.message;
   } finally {
