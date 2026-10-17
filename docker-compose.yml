@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PORT=3000
+    volumes:
+      # Persist users / sessions / known-entities across container rebuilds.
+      - obscura-data:/app/apps/demo-ui/data
+    expose:
+      - "3000"
+    ports:
+      # Direct HTTP access for quick testing (http://<host>:3000).
+      # When using the `tls` profile below, you can remove this mapping so the
+      # app is only reachable through Caddy on 80/443.
+      - "3000:3000"
+
+  # Optional HTTPS front door. Enable with:  docker compose --profile tls up -d
+  # Requires DOMAIN in .env and that domain's DNS A record pointed at this host.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    profiles: ["tls"]
+    depends_on:
+      - app
+    environment:
+      - DOMAIN=${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  obscura-data:
+  caddy-data:
+  caddy-config:

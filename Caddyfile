@@ -1,0 +1,5 @@
+# Auto-HTTPS via Let's Encrypt. Caddy fetches and renews the cert for $DOMAIN
+# automatically, then reverse-proxies to the app container.
+{$DOMAIN} {
+	reverse_proxy app:3000
+}
