@@ -1,4 +1,4 @@
-# PrivacyGuard
+# Obscura
 
 A privacy-first middleware platform that sits between your application and
 third-party LLM providers (OpenAI, Anthropic, Gemini). It intercepts prompts
@@ -19,10 +19,10 @@ User prompt ──▶ [Sanitizer] ──▶ masked prompt ──▶ LLM provider
 
 ## Packages
 
-- **`@privacyguard/core`** - the sanitization engine: detectors, policy
+- **`@obscura/core`** - the sanitization engine: detectors, policy
   engine, masking, encrypted token vault, response reconstruction, and audit
   logging. No third-party network calls.
-- **`@privacyguard/sdk`** - drop-in, privacy-preserving client wrappers for
+- **`@obscura/sdk`** - drop-in, privacy-preserving client wrappers for
   `openai`, `@anthropic-ai/sdk`, and `@google/generative-ai`.
 
 ## How it works
@@ -66,7 +66,7 @@ npm run build
 ### Core engine only
 
 ```ts
-import { Sanitizer } from "@privacyguard/core";
+import { Sanitizer } from "@obscura/core";
 
 const sanitizer = new Sanitizer();
 
@@ -83,9 +83,9 @@ const { reconstructedText } = await sanitizer.reconstruct(requestId, responseTex
 ### Drop-in provider clients
 
 ```ts
-import { PrivacyGuardOpenAI } from "@privacyguard/sdk";
+import { ObscuraOpenAI } from "@obscura/sdk";
 
-const client = new PrivacyGuardOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new ObscuraOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const completion = await client.chat.completions.create({
   model: "gpt-4o-mini",
@@ -93,14 +93,14 @@ const completion = await client.chat.completions.create({
 });
 ```
 
-`PrivacyGuardAnthropic` and `PrivacyGuardGemini` work the same way for
+`ObscuraAnthropic` and `ObscuraGemini` work the same way for
 `@anthropic-ai/sdk` and `@google/generative-ai` respectively. See
 `examples/` for runnable samples.
 
 ## Configuration
 
 ```ts
-import { Sanitizer, EntityType, MaskingStrategy } from "@privacyguard/core";
+import { Sanitizer, EntityType, MaskingStrategy } from "@obscura/core";
 
 const sanitizer = new Sanitizer({
   // Override the default masking strategy per entity type.
@@ -123,7 +123,7 @@ const sanitizer = new Sanitizer({
   vaultTtlMs: 60 * 60 * 1000,
   // 32-byte key for encrypting vault entries at rest (hex, base64, or Buffer).
   // If omitted, a random key is generated per process.
-  encryptionKey: process.env.PRIVACYGUARD_VAULT_KEY,
+  encryptionKey: process.env.OBSCURA_VAULT_KEY,
 });
 ```
 

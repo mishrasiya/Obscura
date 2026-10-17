@@ -1,7 +1,7 @@
 {
-  "name": "@privacyguard/sdk",
+  "name": "@obscura/sdk",
   "version": "0.1.0",
-  "description": "Drop-in privacy-preserving SDK clients for OpenAI, Anthropic, and Gemini that sanitize requests and reconstruct responses using @privacyguard/core",
+  "description": "Drop-in privacy-preserving SDK clients for OpenAI, Anthropic, and Gemini that sanitize requests and reconstruct responses using @obscura/core",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,7 +16,7 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@privacyguard/core": "0.1.0"
+    "@obscura/core": "0.1.0"
   },
   "peerDependencies": {
     "openai": "^4.0.0",

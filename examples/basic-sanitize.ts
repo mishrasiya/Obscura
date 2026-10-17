@@ -2,7 +2,7 @@
  * Minimal example: sanitize a prompt, "send" it to a (fake) LLM, then
  * reconstruct the response. Run with: npx tsx examples/basic-sanitize.ts
  */
-import { Sanitizer } from "@privacyguard/core";
+import { Sanitizer } from "@obscura/core";
 
 async function main() {
   const sanitizer = new Sanitizer();

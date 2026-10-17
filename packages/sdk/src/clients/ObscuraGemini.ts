@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, GenerativeModel, ModelParams, GenerateContentRequest, GenerateContentResult, Part } from "@google/generative-ai";
-import type { SanitizerConfig } from "@privacyguard/core";
-import { BasePrivacyGuardClient } from "../base.js";
+import type { SanitizerConfig } from "@obscura/core";
+import { BaseObscuraClient } from "../base.js";
 
 /** Accepts the same inputs as `GenerativeModel.generateContent`. */
 export type GeminiGenerateContentInput = GenerateContentRequest | string | Array<string | Part>;
@@ -11,13 +11,13 @@ export type GeminiGenerateContentInput = GenerateContentRequest | string | Array
  * sending it, and restores reversible placeholders in the generated text.
  *
  * ```ts
- * const client = new PrivacyGuardGemini(process.env.GEMINI_API_KEY!);
+ * const client = new ObscuraGemini(process.env.GEMINI_API_KEY!);
  * const model = client.getGenerativeModel({ model: "gemini-1.5-pro" });
  * const result = await model.generateContent("My phone number is 555-123-4567...");
  * console.log(result.response.text());
  * ```
  */
-export class PrivacyGuardGemini extends BasePrivacyGuardClient {
+export class ObscuraGemini extends BaseObscuraClient {
   private readonly client: GoogleGenerativeAI;
 
   constructor(apiKey: string, sanitizerConfig: SanitizerConfig = {}) {

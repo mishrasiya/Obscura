@@ -1,11 +1,11 @@
-import { Sanitizer, SanitizerConfig } from "@privacyguard/core";
+import { Sanitizer, SanitizerConfig } from "@obscura/core";
 
 /**
  * Shared base for provider-specific privacy-preserving clients. Holds the
  * underlying {@link Sanitizer} instance used to mask outgoing prompts and
  * restore reversible placeholders in responses.
  */
-export abstract class BasePrivacyGuardClient {
+export abstract class BaseObscuraClient {
   protected readonly sanitizer: Sanitizer;
 
   constructor(sanitizerConfig: SanitizerConfig = {}) {

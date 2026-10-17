@@ -2,7 +2,7 @@
  * Example: configuring custom masking policies and organization-specific
  * detection rules. Run with: npx tsx examples/custom-policy.ts
  */
-import { Sanitizer, EntityType, MaskingStrategy } from "@privacyguard/core";
+import { Sanitizer, EntityType, MaskingStrategy } from "@obscura/core";
 
 async function main() {
   const sanitizer = new Sanitizer({

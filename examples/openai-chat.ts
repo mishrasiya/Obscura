@@ -4,10 +4,10 @@
  *
  * Run with: OPENAI_API_KEY=sk-... npx tsx examples/openai-chat.ts
  */
-import { PrivacyGuardOpenAI } from "@privacyguard/sdk";
+import { ObscuraOpenAI } from "@obscura/sdk";
 
 async function main() {
-  const client = new PrivacyGuardOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new ObscuraOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",

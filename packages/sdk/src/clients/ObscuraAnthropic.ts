@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Message, MessageCreateParamsNonStreaming, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
-import type { SanitizerConfig } from "@privacyguard/core";
-import { BasePrivacyGuardClient } from "../base.js";
+import type { SanitizerConfig } from "@obscura/core";
+import { BaseObscuraClient } from "../base.js";
 import { extractTexts, rebuildWithTexts } from "../textExtraction.js";
 
-export interface PrivacyGuardAnthropicOptions {
+export interface ObscuraAnthropicOptions {
   apiKey?: string;
   baseURL?: string;
 }
@@ -16,7 +16,7 @@ export interface PrivacyGuardAnthropicOptions {
  * blocks.
  *
  * ```ts
- * const client = new PrivacyGuardAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+ * const client = new ObscuraAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
  * const response = await client.messages.create({
  *   model: "claude-sonnet-4-6",
  *   max_tokens: 1024,
@@ -26,10 +26,10 @@ export interface PrivacyGuardAnthropicOptions {
  *
  * Note: streaming responses are not yet supported; `stream` is forced to `false`.
  */
-export class PrivacyGuardAnthropic extends BasePrivacyGuardClient {
+export class ObscuraAnthropic extends BaseObscuraClient {
   private readonly client: Anthropic;
 
-  constructor(options: PrivacyGuardAnthropicOptions = {}, sanitizerConfig: SanitizerConfig = {}) {
+  constructor(options: ObscuraAnthropicOptions = {}, sanitizerConfig: SanitizerConfig = {}) {
     super(sanitizerConfig);
     this.client = new Anthropic(options);
   }

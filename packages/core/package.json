@@ -1,5 +1,5 @@
 {
-  "name": "@privacyguard/core",
+  "name": "@obscura/core",
   "version": "0.1.0",
   "description": "Privacy-first sanitization engine: detects and masks PII, PHI, and secrets in text before it reaches third-party LLM providers, and reconstructs responses afterward.",
   "type": "module",

@@ -8,14 +8,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
-import { Sanitizer, DEFAULT_POLICY, EntityType, MaskingStrategy } from "@privacyguard/core";
+import { Sanitizer, DEFAULT_POLICY, EntityType, MaskingStrategy } from "@obscura/core";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
-const JWT_SECRET = process.env.JWT_SECRET ?? "privacyguard-dev-secret-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET ?? "obscura-dev-secret-change-in-production";
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn("Warning: ANTHROPIC_API_KEY is not set. /api/chat will return an error until it is configured.");
@@ -124,7 +124,7 @@ async function saveSessionsForUser(userId: string): Promise<void> {
 // ── Auth middleware ────────────────────────────────────────────────────────
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const token = req.cookies?.pgtoken as string | undefined;
+  const token = req.cookies?.obscura_token as string | undefined;
   if (!token) {
     res.status(401).json({ error: "Not authenticated" });
     return;
@@ -183,7 +183,7 @@ app.post("/api/auth/register", async (req, res) => {
     await saveUsers();
 
     const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
-    res.cookie("pgtoken", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie("obscura_token", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
     res.json({ id: user.id, username: user.username });
   } catch (err) {
     console.error(err);
@@ -201,7 +201,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
 
     const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
-    res.cookie("pgtoken", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie("obscura_token", token, { httpOnly: true, sameSite: "strict", maxAge: 7 * 24 * 3600 * 1000 });
     res.json({ id: user.id, username: user.username });
   } catch (err) {
     console.error(err);
@@ -210,7 +210,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.post("/api/auth/logout", (_req, res) => {
-  res.clearCookie("pgtoken");
+  res.clearCookie("obscura_token");
   res.json({ ok: true });
 });
 
@@ -384,7 +384,7 @@ async function main() {
   await warmup.warmup();
 
   app.listen(PORT, () => {
-    console.log(`PrivacyGuard demo UI running at http://localhost:${PORT}`);
+    console.log(`Obscura demo UI running at http://localhost:${PORT}`);
   });
 }
 

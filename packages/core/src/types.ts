@@ -1,5 +1,5 @@
 /**
- * Core type definitions and entity taxonomy for the PrivacyGuard sanitization engine.
+ * Core type definitions and entity taxonomy for the Obscura sanitization engine.
  */
 
 /** High-level classification used for reporting and policy grouping. */

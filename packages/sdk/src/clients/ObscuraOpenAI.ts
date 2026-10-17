@@ -4,11 +4,11 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
-import type { SanitizerConfig } from "@privacyguard/core";
-import { BasePrivacyGuardClient } from "../base.js";
+import type { SanitizerConfig } from "@obscura/core";
+import { BaseObscuraClient } from "../base.js";
 import { extractTexts, rebuildWithTexts, TextRef } from "../textExtraction.js";
 
-export interface PrivacyGuardOpenAIOptions {
+export interface ObscuraOpenAIOptions {
   apiKey?: string;
   baseURL?: string;
   organization?: string;
@@ -24,7 +24,7 @@ export interface PrivacyGuardOpenAIOptions {
  * Usage mirrors the official SDK:
  *
  * ```ts
- * const client = new PrivacyGuardOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+ * const client = new ObscuraOpenAI({ apiKey: process.env.OPENAI_API_KEY });
  * const completion = await client.chat.completions.create({
  *   model: "gpt-4o",
  *   messages: [{ role: "user", content: "My email is jane@example.com..." }],
@@ -33,10 +33,10 @@ export interface PrivacyGuardOpenAIOptions {
  *
  * Note: streaming responses are not yet supported; `stream` is forced to `false`.
  */
-export class PrivacyGuardOpenAI extends BasePrivacyGuardClient {
+export class ObscuraOpenAI extends BaseObscuraClient {
   private readonly client: OpenAI;
 
-  constructor(options: PrivacyGuardOpenAIOptions = {}, sanitizerConfig: SanitizerConfig = {}) {
+  constructor(options: ObscuraOpenAIOptions = {}, sanitizerConfig: SanitizerConfig = {}) {
     super(sanitizerConfig);
     this.client = new OpenAI(options);
   }
