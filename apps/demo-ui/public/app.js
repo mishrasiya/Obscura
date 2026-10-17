@@ -325,12 +325,15 @@ function renderEntities(entities) {
     label.className = "entity-label";
     label.textContent = TYPE_LABELS[entity.type] || prettifyType(entity.type);
 
-    const value = document.createElement("div");
-    value.className = "entity-value";
-    value.textContent = entity.value;
-
     info.appendChild(label);
-    info.appendChild(value);
+
+    // Raw value is only present in the live view; reloaded history stores none.
+    if (entity.value) {
+      const value = document.createElement("div");
+      value.className = "entity-value";
+      value.textContent = entity.value;
+      info.appendChild(value);
+    }
 
     const badge = document.createElement("span");
     badge.className = `badge ${entity.strategy}`;
@@ -343,7 +346,8 @@ function renderEntities(entities) {
       dbBadge.className = "badge dictionary-source";
       dbBadge.textContent = "From your privacy database";
       row.appendChild(dbBadge);
-    } else {
+    } else if (entity.value) {
+      // "Always hide this" needs the raw value, so it's live-view only.
       const addBtn = document.createElement("button");
       addBtn.className = "entity-add-btn";
       addBtn.textContent = "+ Always hide this";
@@ -437,10 +441,12 @@ async function loadSession(sessionId) {
     chatThread.innerHTML = "";
     emptyState.hidden = true;
 
+    // Stored history contains only masked content (we never persist raw PII),
+    // so reloaded conversations show the tokenized text that the AI actually saw.
     for (const message of session.messages) {
       appendMessage({
         role: message.role,
-        text: message.text,
+        text: message.maskedText,
         maskedText: message.maskedText,
         entities: message.entities,
       });

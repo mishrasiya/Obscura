@@ -37,11 +37,18 @@ interface AuthPayload {
   username: string;
 }
 
+/**
+ * A persisted chat message. By design this NEVER contains raw sensitive data:
+ * only the masked/tokenized text and value-free entity metadata are stored.
+ * The real (reconstructed) text is returned live in the HTTP response but is
+ * never written to disk.
+ */
 interface ChatMessage {
   role: "user" | "assistant";
-  text: string;
+  /** Masked/tokenized content only — safe to persist (this is what the LLM saw). */
   maskedText: string;
-  entities?: Array<{ type: string; category: string; value: string; strategy: string; source: string }>;
+  /** Entity metadata WITHOUT the raw `value`. */
+  entities?: Array<{ type: string; category: string; strategy: string; source: string }>;
   timestamp: number;
 }
 
@@ -254,7 +261,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       sessions.unshift(session);
     }
 
-    const { requestId, sanitizedText, originalText, entities } = await sanitizer.sanitize(message, session.id);
+    const { requestId, sanitizedText, entities } = await sanitizer.sanitize(message, session.id);
 
     const claudeMessages: Anthropic.MessageParam[] = session.messages.map((m) => ({
       role: m.role,
@@ -276,6 +283,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
     const { reconstructedText } = await sanitizer.reconstruct(requestId, rawResponse);
 
+    // Rich entities (incl. raw value) for the LIVE response only — never persisted.
     const entitiesWithStrategy = entities.map((entity) => ({
       type: entity.type as string,
       category: entity.category as string,
@@ -284,17 +292,25 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       strategy: (DEFAULT_POLICY[entity.type as EntityType] ?? MaskingStrategy.REDACT) as string,
     }));
 
+    // Value-free metadata — this is the only entity info written to disk.
+    const persistedEntities = entitiesWithStrategy.map(({ type, category, strategy, source }) => ({
+      type,
+      category,
+      strategy,
+      source,
+    }));
+
     const now = Date.now();
+    // Persist masked content only. originalText and reconstructedText (which
+    // contain real PII) are deliberately NOT stored.
     session.messages.push({
       role: "user",
-      text: originalText,
       maskedText: sanitizedText,
-      entities: entitiesWithStrategy,
+      entities: persistedEntities,
       timestamp: now,
     });
     session.messages.push({
       role: "assistant",
-      text: reconstructedText,
       maskedText: rawResponse,
       timestamp: now,
     });
