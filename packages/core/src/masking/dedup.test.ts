@@ -19,6 +19,23 @@ test("repeated identical values reuse a single token", async () => {
   assert.equal(reconstructedText, text, "reconstruction restores every occurrence");
 });
 
+test("surname propagation masks a related name NER missed", async () => {
+  // Seed two family members as known (stand-in for NER having tagged them);
+  // the third shares the surname but is never seeded/tagged.
+  const sanitizer = new Sanitizer({
+    enableNer: false,
+    knownEntities: [
+      { value: "Arthur Pendelton", type: EntityType.PERSON_NAME },
+      { value: "Beatrice Pendelton", type: EntityType.PERSON_NAME },
+    ],
+  });
+  const text = "Arthur Pendelton, Beatrice Pendelton. Prepared by Marcus Pendelton.";
+  const { sanitizedText } = await sanitizer.sanitize(text);
+
+  assert.ok(!sanitizedText.includes("Marcus Pendelton"), "Marcus Pendelton must be masked via surname");
+  assert.ok(!sanitizedText.includes("Pendelton"), "no surname should remain in plain text");
+});
+
 test("distinct values still get distinct tokens", async () => {
   const sanitizer = new Sanitizer({ enableNer: false });
   const { sanitizedText } = await sanitizer.sanitize(

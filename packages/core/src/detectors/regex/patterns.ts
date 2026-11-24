@@ -361,6 +361,13 @@ const PHI_RULES: RegexRule[] = [
     pattern: /\b(?:MBI\s*(?:is\s+|[:\s#=\-]+)\s*)?[1-9][A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z]\d{2}\b/gi,
   },
   {
+    // Insurance group number in the common "GRP-####" form, matched without
+    // needing an adjacent "Group" label (survives table/pipe formatting where
+    // the label-to-value link is broken).
+    type: EntityType.HEALTH_INSURANCE_ID,
+    pattern: /\bGRP-?\d{3,8}\b/gi,
+  },
+  {
     // Health insurance member ID / policy / group (labeled). "Policy" accepted
     // bare ("Policy XYZ987654321") as well as "Policy No/Number".
     type: EntityType.HEALTH_INSURANCE_ID,

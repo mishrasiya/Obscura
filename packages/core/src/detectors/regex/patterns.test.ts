@@ -28,6 +28,7 @@ const CASES: Array<{ name: string; text: string; type: EntityType; value: string
   { name: "mbi", text: "MBI 1EG4-TE5-MK72", type: EntityType.HEALTH_INSURANCE_ID, value: "MBI 1EG4-TE5-MK72" },
   { name: "policy bare", text: "Policy XYZ987654321", type: EntityType.HEALTH_INSURANCE_ID, value: "Policy XYZ987654321" },
   { name: "group", text: "Group GRP-4402", type: EntityType.HEALTH_INSURANCE_ID, value: "Group GRP-4402" },
+  { name: "group in table", text: "| Group | GRP-4402 |", type: EntityType.HEALTH_INSURANCE_ID, value: "GRP-4402" },
 
   // Account / encounter numbers (previously a total miss).
   { name: "encounter labeled", text: "Encounter: ENC-2026-884120", type: EntityType.ENCOUNTER_NUMBER, value: "Encounter: ENC-2026-884120" },

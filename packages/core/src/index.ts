@@ -5,6 +5,7 @@ import {
   AuditEvent,
   AuditSink,
   DetectedEntity,
+  ENTITY_CATEGORY,
   EntityType,
   KnownEntity,
   ReconstructResult,
@@ -132,10 +133,17 @@ export class Sanitizer {
 
   /**
    * Self-consistency pass: NER may tag a name/org/location in one position
-   * but miss the same value elsewhere (e.g. a proxy name under "Prepared by").
-   * Here we treat every free-form entity already detected as a known value and
-   * sweep the whole text for its other verbatim occurrences, then re-merge.
-   * Existing (higher-priority) spans win on overlap, so this only fills gaps.
+   * but miss the same value elsewhere (e.g. a proxy name under "Prepared by"),
+   * or miss a related name entirely. Two complementary sweeps fill those gaps,
+   * then we re-merge. Existing (higher-priority) spans win on overlap, so this
+   * only ever adds coverage.
+   *
+   *  1. Verbatim sweep: every detected name/org/location is treated as a known
+   *     value and all its other occurrences are masked.
+   *  2. Surname sweep: for multi-token person names we learn the surname and
+   *     mask "<FirstName...> Surname" (and the bare surname) anywhere it
+   *     appears — catching e.g. "Marcus Pendelton" from having seen "Arthur
+   *     Pendelton", even if NER never tagged Marcus.
    */
   private propagateNamedEntities(text: string, entities: DetectedEntity[]): DetectedEntity[] {
     const PROPAGATE = new Set<EntityType>([
@@ -146,21 +154,50 @@ export class Sanitizer {
 
     const seen = new Set<string>();
     const knownFromDetections: KnownEntity[] = [];
+    const surnames = new Set<string>();
     for (const e of entities) {
       if (!PROPAGATE.has(e.type as EntityType)) continue;
       const value = e.value.trim();
       // Skip trivially short values to avoid masking common words.
       if (value.length < 3) continue;
       const key = `${e.type}:${value.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      knownFromDetections.push({ value, type: e.type as KnownEntity["type"] });
+      if (!seen.has(key)) {
+        seen.add(key);
+        knownFromDetections.push({ value, type: e.type as KnownEntity["type"] });
+      }
+      if (e.type === EntityType.PERSON_NAME) {
+        const tokens = value.split(/\s+/).filter((t) => /[A-Za-z]/.test(t));
+        if (tokens.length >= 2) {
+          const last = tokens[tokens.length - 1].replace(/[^A-Za-z'’.-]/g, "");
+          if (last.length >= 4) surnames.add(last);
+        }
+      }
     }
 
-    if (knownFromDetections.length === 0) return entities;
+    const extraOccurrences =
+      knownFromDetections.length > 0 ? detectWithDictionary(text, knownFromDetections) : [];
 
-    const extraOccurrences = detectWithDictionary(text, knownFromDetections);
-    return mergeEntities(entities, extraOccurrences);
+    const surnameHits: DetectedEntity[] = [];
+    for (const surname of surnames) {
+      const escaped = surname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // Optional up-to-two leading Capitalized tokens (the given name[s]).
+      const re = new RegExp(`\\b(?:[A-Z][A-Za-z'’.-]+\\s+){0,2}${escaped}\\b`, "g");
+      for (const m of text.matchAll(re)) {
+        if (m.index === undefined) continue;
+        surnameHits.push({
+          type: EntityType.PERSON_NAME,
+          category: ENTITY_CATEGORY[EntityType.PERSON_NAME],
+          value: m[0],
+          start: m.index,
+          end: m.index + m[0].length,
+          confidence: 1,
+          source: "dictionary",
+        });
+      }
+    }
+
+    if (extraOccurrences.length === 0 && surnameHits.length === 0) return entities;
+    return mergeEntities(entities, extraOccurrences, surnameHits);
   }
 
   /**
