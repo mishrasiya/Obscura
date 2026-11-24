@@ -237,6 +237,15 @@ const PII_RULES: RegexRule[] = [
     pattern: /\b(?:DOB|Date\s?of\s?Birth|Birth\s?date)\s*(?:is\s+|[:\s]+)\s?(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]+\s\d{1,2},?\s\d{4})\b/gi,
   },
   {
+    // Generic calendar date more specific than a year (HIPAA requires masking
+    // all such dates). Covers numeric (MM/DD/YYYY, MM-DD-YY), ISO (YYYY-MM-DD),
+    // and long-form ("October 14, 2026"). Labeled DOB/service dates above are
+    // longer matches and win over this on overlap.
+    type: EntityType.DATE,
+    pattern:
+      /\b(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/gi,
+  },
+  {
     // Labeled username/handle: "username: jdoe123", "@jane_doe"
     type: EntityType.USERNAME,
     pattern: /\b(?:Username|User\s?ID|Login|Handle)[:\s]+\s?[A-Za-z0-9_.@-]{3,32}\b|@[A-Za-z0-9_]{3,24}\b/gi,
@@ -245,6 +254,13 @@ const PII_RULES: RegexRule[] = [
     // Basic US street address: "123 Main St", "4500 Oak Avenue, Apt 2"
     type: EntityType.ADDRESS,
     pattern: /\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,3}\s+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Drive|Dr|Lane|Ln|Road|Rd|Court|Ct|Place|Pl|Square|Sq|Way|Terrace|Ter|Circle|Cir)\.?(?:,?\s+(?:Apt|Suite|Ste|Unit|#)\.?\s?[A-Za-z0-9-]+)?\b/gi,
+  },
+  {
+    // Healthcare facility / institution names ending in a known org keyword,
+    // e.g. "St. Jude Regional Medical Center", "Mercy Hospital". Catches
+    // facility names the NER model may miss. 1-5 leading capitalized tokens.
+    type: EntityType.ORGANIZATION,
+    pattern: /\b(?:[A-Z][A-Za-z.'&-]+\s+){1,5}(?:Regional\s+Medical\s+Center|Medical\s+Center|Medical\s+Group|Health\s+System|Health\s+Center|Healthcare|Hospital|Clinic|Infirmary)\b/g,
   },
   {
     // MAC address: "00:1A:2B:3C:4D:5E" or "00-1A-2B-3C-4D-5E"
@@ -278,9 +294,12 @@ const PII_RULES: RegexRule[] = [
     pattern: /\bFax(?:\s?(?:No\.?|Number))?\s*(?:is\s+|[:\s]+)\s*(?:\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/gi,
   },
   {
-    // ZIP / postal code — accepts "ZIP Code: 90210", "zip is 90210", "Postal Code 90210"
+    // ZIP / postal code. Labeled ("ZIP Code: 90210", "zip is 90210") OR an
+    // unlabeled 5-digit (+optional +4) that follows a comma — i.e. the
+    // "City, ST 62704" / "Springfield, 62704" geographic tail. The 4-digit
+    // year case (", 2026") can't match \d{5}, avoiding that false positive.
     type: EntityType.ZIP_CODE,
-    pattern: /\b(?:ZIP(?:\s+Code)?|Postal\s+Code)\s*(?:is\s+|[:\s=]+)\s*\d{5}(?:-\d{4})?\b/gi,
+    pattern: /\b(?:ZIP(?:\s+Code)?|Postal\s+Code)\s*(?:is\s+|[:\s=]+)\s*\d{5}(?:-\d{4})?\b|(?<=,\s{1,3})(?:[A-Z]{2}\s+)?\d{5}(?:-\d{4})?\b/gi,
   },
   {
     // Labeled vehicle license plate: "Plate: 7XYZ123", "License Plate Number: ABC-1234"
@@ -328,14 +347,39 @@ const PHI_RULES: RegexRule[] = [
     pattern: /\b[A-Z]{2}\d{7}\b/g,
   },
   {
-    // Medical record number (labeled): "MRN: 1234567"
+    // Medical record number (labeled): "MRN: 1234567", "MRN 00984512-A".
+    // Allows an optional alphanumeric suffix (e.g. "-A") so facility-specific
+    // check characters aren't left dangling.
     type: EntityType.MEDICAL_RECORD_NUMBER,
-    pattern: /\bMRN\s*(?:is\s+|[:\s#=\-]+)\s?\d{5,10}\b/gi,
+    pattern: /\bMRN\s*(?:is\s+|[:\s#=\-]+)\s?\d{5,10}(?:-[A-Za-z0-9]{1,4})?\b/gi,
   },
   {
-    // Health insurance member ID / plan (labeled)
+    // Medicare Beneficiary Identifier (MBI): 11 chars in the pattern
+    // C-A-AN-N-A-AN-N-A-A-N-N (dashes optional), e.g. "1EG4-TE5-MK72".
+    // Highly structured, so safe to match unlabeled as well as labeled.
     type: EntityType.HEALTH_INSURANCE_ID,
-    pattern: /\b(?:Member\s?ID|Policy\s?(?:No\.?|Number)|Health\s?Plan(?:\s*\/\s*Insurance)?|Insurance(?:\s?ID|\s?Plan)?)\b[:\s#\/-]*(?:[A-Za-z]{2,6}-[A-Za-z]{2,6}\s+)?(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,15}\b/gi,
+    pattern: /\b(?:MBI\s*(?:is\s+|[:\s#=\-]+)\s*)?[1-9][A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z]\d{2}\b/gi,
+  },
+  {
+    // Health insurance member ID / policy / group (labeled). "Policy" accepted
+    // bare ("Policy XYZ987654321") as well as "Policy No/Number".
+    type: EntityType.HEALTH_INSURANCE_ID,
+    pattern: /\b(?:Member\s?ID|Policy(?:\s?(?:No\.?|Number|ID|#))?|Group(?:\s?(?:No\.?|Number|ID|#))?|Health\s?Plan(?:\s*\/\s*Insurance)?|Insurance(?:\s?ID|\s?Plan)?)\b[:\s#\/-]*(?:[A-Za-z]{2,6}-[A-Za-z]{2,6}\s+)?(?=[A-Za-z0-9-]*\d)[A-Za-z0-9]{2,6}-?[A-Za-z0-9]{2,12}\b/gi,
+  },
+  {
+    // Encounter / visit / account number: labeled ("Encounter: ENC-2026-884120")
+    // or the common ENC-YYYY-NNNNNN token on its own.
+    type: EntityType.ENCOUNTER_NUMBER,
+    pattern: new RegExp(
+      String.raw`\b(?:Encounter|Visit|Case)\s?(?:No\.?|Number|ID|#)?` + SEP + String.raw`[A-Z0-9][A-Z0-9-]{3,20}\b` +
+      String.raw`|\bENC-\d{2,4}-\d{3,8}\b`,
+      "gi"
+    ),
+  },
+  {
+    // Hospital room / bed identifier: "Room 412B", "Room No. 7", "Room #3A"
+    type: EntityType.ROOM_NUMBER,
+    pattern: /\bRoom\s+(?:No\.?\s*|Number\s*|#\s*)?\d{1,4}[A-Za-z]?\b/gi,
   },
   {
     // Hospital and billing account numbers (labeled)
@@ -350,7 +394,7 @@ const PHI_RULES: RegexRule[] = [
   {
     // Labeled service-related dates (HIPAA "dates related to an individual")
     type: EntityType.DATE_OF_SERVICE,
-    pattern: /\b(?:Admission|Discharge|Admitted|Discharged|Date\s?of\s?Service|Service\s?Date|Surgery\s?Date|Treatment\s?Date)\s*(?:is\s+|[:\s]+)\s?(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]+\s\d{1,2},?\s\d{4})\b/gi,
+    pattern: /\b(?:Admission|Admit(?:ted)?|Discharge(?:d)?|Date\s?of\s?Service|DOS|Service\s?Date|Surgery\s?Date|Treatment\s?Date)(?:\s?Date)?\s*(?:is\s+|[:\s]+)\s?(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]+\s\d{1,2},?\s\d{4})\b/gi,
   },
   {
     // Labeled healthcare provider license number
@@ -358,10 +402,20 @@ const PHI_RULES: RegexRule[] = [
     pattern: /\b(?:Provider|Medical|Physician|Practitioner)\s?License\s?(?:No\.?|Number|#)?\s*(?:is\s+|[:\s#=\-]+)\s?[A-Z0-9-]{4,15}\b/gi,
   },
   {
-    // Medical device / implant serial number (labeled) — accepts ": ", "is", "number is"
+    // UDI in GS1 Application-Identifier form, e.g.
+    // "(01)00884450123456(17)281019(21)9948271". Matched as a whole so the
+    // embedded GTIN digits aren't mis-detected as a phone number. Listed
+    // before the generic serial rule; its earlier start / longer span also
+    // win overlap resolution against the PII phone rule.
+    type: EntityType.MEDICAL_DEVICE_SERIAL,
+    pattern: /(?:UDI[:\s]*)?(?:\((?:01|10|11|17|21)\)[A-Za-z0-9]+){2,}/g,
+  },
+  {
+    // Medical device / implant serial number (labeled) — accepts ": ", "is",
+    // "number is". "Serial"/"SN" labels included (e.g. "Serial SN-9948271-MX").
     type: EntityType.MEDICAL_DEVICE_SERIAL,
     pattern: new RegExp(
-      String.raw`\b(?:Device\s?Serial(?:\s?(?:No\.?|Number|#))?|Implant\s?(?:ID|Serial)|Pacemaker\s?(?:ID|Serial|No\.?|Serial\s+Number)?|UDI)` +
+      String.raw`\b(?:Device\s?Serial(?:\s?(?:No\.?|Number|#))?|Serial(?:\s?(?:No\.?|Number|#))?|Implant\s?(?:ID|Serial)|Pacemaker\s?(?:ID|Serial|No\.?|Serial\s+Number)?|UDI)` +
       SEP +
       String.raw`[A-Z0-9-]{4,20}\b`,
       "gi"

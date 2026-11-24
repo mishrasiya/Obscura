@@ -31,6 +31,7 @@ export enum EntityType {
   PASSPORT_NUMBER = "PASSPORT_NUMBER",
   DRIVERS_LICENSE = "DRIVERS_LICENSE",
   DATE_OF_BIRTH = "DATE_OF_BIRTH",
+  DATE = "DATE",                                    // Any calendar date more specific than a year
   PERSON_NAME = "PERSON_NAME",
   ADDRESS = "ADDRESS",
   ORGANIZATION = "ORGANIZATION",
@@ -55,6 +56,8 @@ export enum EntityType {
   HEALTH_INSURANCE_ID = "HEALTH_INSURANCE_ID",
   DEA_NUMBER = "DEA_NUMBER",
   BILLING_ACCOUNT_NUMBER = "BILLING_ACCOUNT_NUMBER",
+  ENCOUNTER_NUMBER = "ENCOUNTER_NUMBER",            // Encounter / visit / account number
+  ROOM_NUMBER = "ROOM_NUMBER",                      // Hospital room / bed identifier
   DATE_OF_SERVICE = "DATE_OF_SERVICE",
   PATIENT_ID = "PATIENT_ID",
   PROVIDER_LICENSE_NUMBER = "PROVIDER_LICENSE_NUMBER",
@@ -103,6 +106,7 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.PASSPORT_NUMBER]: "PII",
   [EntityType.DRIVERS_LICENSE]: "PII",
   [EntityType.DATE_OF_BIRTH]: "PII",
+  [EntityType.DATE]: "PII",
   [EntityType.PERSON_NAME]: "PII",
   [EntityType.ADDRESS]: "PII",
   [EntityType.ORGANIZATION]: "PII",
@@ -126,6 +130,8 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.HEALTH_INSURANCE_ID]: "PHI",
   [EntityType.DEA_NUMBER]: "PHI",
   [EntityType.BILLING_ACCOUNT_NUMBER]: "PHI",
+  [EntityType.ENCOUNTER_NUMBER]: "PHI",
+  [EntityType.ROOM_NUMBER]: "PHI",
   [EntityType.DATE_OF_SERVICE]: "PHI",
   [EntityType.PATIENT_ID]: "PHI",
   [EntityType.PROVIDER_LICENSE_NUMBER]: "PHI",
