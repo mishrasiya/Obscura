@@ -272,6 +272,12 @@ const PII_RULES: RegexRule[] = [
     pattern: /\b(?:[A-Z][A-Za-z.'&-]+\s+){1,5}(?:Regional\s+Medical\s+Center|Medical\s+Center|Medical\s+Group|Health\s+System|Health\s+Center|Healthcare|Hospital|Clinic|Infirmary)\b/g,
   },
   {
+    // Standalone unit / apartment designator, e.g. "Unit 9C", "Apt 4B",
+    // "Ste 200" - catches it when it appears separately from the street line.
+    type: EntityType.ADDRESS,
+    pattern: /\b(?:Apartment|Apt|Suite|Ste|Unit)\.?\s*#?\s*[A-Za-z0-9-]{1,6}\b/gi,
+  },
+  {
     // MAC address: "00:1A:2B:3C:4D:5E" or "00-1A-2B-3C-4D-5E"
     type: EntityType.MAC_ADDRESS,
     pattern: /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g,
@@ -453,7 +459,7 @@ const PHI_RULES: RegexRule[] = [
     // "number is". "Serial"/"SN" labels included (e.g. "Serial SN-9948271-MX").
     type: EntityType.MEDICAL_DEVICE_SERIAL,
     pattern: new RegExp(
-      String.raw`\b(?:Device\s?Serial(?:\s?(?:No\.?|Number|#))?|Serial(?:\s?(?:No\.?|Number|#))?|Implant\s?(?:ID|Serial)|Pacemaker\s?(?:ID|Serial|No\.?|Serial\s+Number)?|UDI)` +
+      String.raw`\b(?:Device\s?Serial(?:\s?(?:No\.?|Number|#))?|Serial(?:\s?(?:No\.?|Number|#))?|S\/?N|Implant\s?(?:ID|Serial)|Pacemaker\s?(?:ID|Serial|No\.?|Serial\s+Number)?|UDI)` +
       SEP +
       String.raw`[A-Z0-9-]{4,20}\b`,
       "gi"
