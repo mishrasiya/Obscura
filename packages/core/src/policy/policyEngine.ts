@@ -33,6 +33,7 @@ export const DEFAULT_POLICY: Record<EntityType, MaskingStrategy> = {
   [EntityType.DRIVERS_LICENSE]: MaskingStrategy.TOKENIZE,
   [EntityType.DATE_OF_BIRTH]: MaskingStrategy.TOKENIZE,
   [EntityType.DATE]: MaskingStrategy.TOKENIZE,
+  [EntityType.AGE]: MaskingStrategy.TOKENIZE,
   [EntityType.PERSON_NAME]: MaskingStrategy.TOKENIZE,
   [EntityType.ADDRESS]: MaskingStrategy.TOKENIZE,
   [EntityType.ORGANIZATION]: MaskingStrategy.TOKENIZE,

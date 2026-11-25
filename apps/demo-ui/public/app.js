@@ -32,6 +32,7 @@ const TYPE_LABELS = {
   DRIVERS_LICENSE: "Driver's license number",
   DATE_OF_BIRTH: "Date of birth",
   DATE: "Date",
+  AGE: "Age (90+)",
   PERSON_NAME: "Name",
   ADDRESS: "Address",
   ORGANIZATION: "Organization",

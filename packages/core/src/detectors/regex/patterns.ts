@@ -137,6 +137,15 @@ const PII_RULES: RegexRule[] = [
     pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
   },
   {
+    // Obfuscated email: "@" written as [at]/(at) and "." as [dot]/(dot),
+    // e.g. "eleanor [dot] vance93 [at] example [dot] com". Only bracketed/
+    // parenthesised/symbol separators (not the bare words "at"/"dot") so
+    // ordinary prose like "meet at the dot" isn't matched.
+    type: EntityType.EMAIL,
+    pattern:
+      /[A-Za-z0-9._%+-]+(?:(?:\s*\[dot\]\s*|\s*\(dot\)\s*|\.)[A-Za-z0-9._%+-]+)*(?:\s*\[at\]\s*|\s*\(at\)\s*|@)[A-Za-z0-9-]+(?:(?:\s*\[dot\]\s*|\s*\(dot\)\s*|\.)[A-Za-z0-9-]+)+/gi,
+  },
+  {
     // US SSN: 123-45-6789, 123 45 6789, 123456789
     type: EntityType.SSN,
     pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
@@ -318,6 +327,14 @@ const PHI_RULES: RegexRule[] = [
     pattern: /\b[A-TV-Z]\d{2}(?:\.\d{1,4})?\b/g,
   },
   {
+    // Age of 90+ (HIPAA Safe Harbor). Labeled ("age 93", "aged 93") or
+    // descriptive ("93 years old", "93-year-old", "93 y/o"). Range 90-129
+    // keeps it from firing on ordinary two-digit quantities.
+    type: EntityType.AGE,
+    pattern:
+      /\b(?:age[d]?\s*(?:is\s+|[:\s=]+)\s*(?:9\d|1[0-2]\d)|(?:9\d|1[0-2]\d)[\s-]*(?:years?[\s-]*old|y\/?o\b|yrs?[\s-]*old))/gi,
+  },
+  {
     // CPT procedure code (labeled, exactly 5 digits with optional letter suffix)
     // Accepts "CPT Code: 99213", "CPT 99213", "cpt code is 99213", "procedure code 99213"
     type: EntityType.CPT_CODE,
@@ -359,6 +376,20 @@ const PHI_RULES: RegexRule[] = [
     // Highly structured, so safe to match unlabeled as well as labeled.
     type: EntityType.HEALTH_INSURANCE_ID,
     pattern: /\b(?:MBI\s*(?:is\s+|[:\s#=\-]+)\s*)?[1-9][A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z0-9]\d-?[A-Za-z][A-Za-z]\d{2}\b/gi,
+  },
+  {
+    // MBI dictated with a separator between every character, e.g.
+    // "MBI is 2 S A 9 - T E 4 - M K 8 8". Requires the "MBI" label (the
+    // per-character spacing is otherwise too loose to match safely).
+    type: EntityType.HEALTH_INSURANCE_ID,
+    pattern: /\bMBI\s*(?:is\s+|[:\s#=\-]+)\s*[1-9][\s-]*[A-Za-z][\s-]*[A-Za-z0-9][\s-]*\d[\s-]*[A-Za-z][\s-]*[A-Za-z0-9][\s-]*\d[\s-]*[A-Za-z][\s-]*[A-Za-z][\s-]*\d[\s-]*\d\b/gi,
+  },
+  {
+    // Alphanumeric member/policy id: a single leading letter + 8-11 digits
+    // (e.g. "W204819204") that the labeled rule misses when it trails another
+    // value after a slash ("GRP-9921 / W204819204").
+    type: EntityType.HEALTH_INSURANCE_ID,
+    pattern: /\b[A-Z]\d{8,11}\b/g,
   },
   {
     // Insurance group number in the common "GRP-####" form, matched without

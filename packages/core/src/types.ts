@@ -32,6 +32,7 @@ export enum EntityType {
   DRIVERS_LICENSE = "DRIVERS_LICENSE",
   DATE_OF_BIRTH = "DATE_OF_BIRTH",
   DATE = "DATE",                                    // Any calendar date more specific than a year
+  AGE = "AGE",                                      // Age 90+ (HIPAA Safe Harbor)
   PERSON_NAME = "PERSON_NAME",
   ADDRESS = "ADDRESS",
   ORGANIZATION = "ORGANIZATION",
@@ -107,6 +108,7 @@ export const ENTITY_CATEGORY: Record<EntityType, EntityCategory> = {
   [EntityType.DRIVERS_LICENSE]: "PII",
   [EntityType.DATE_OF_BIRTH]: "PII",
   [EntityType.DATE]: "PII",
+  [EntityType.AGE]: "PHI",
   [EntityType.PERSON_NAME]: "PII",
   [EntityType.ADDRESS]: "PII",
   [EntityType.ORGANIZATION]: "PII",

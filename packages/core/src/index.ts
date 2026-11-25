@@ -16,6 +16,7 @@ import {
 import { detectWithRegex } from "./detectors/regex/regexDetector.js";
 import { detectWithNer, warmupNer } from "./detectors/ner/nerDetector.js";
 import { detectWithDictionary } from "./detectors/dictionary/dictionaryDetector.js";
+import { detectObfuscated } from "./detectors/obfuscation/obfuscationDetector.js";
 import { mergeEntities } from "./merge.js";
 import { PolicyEngine } from "./policy/policyEngine.js";
 import { applyMasking } from "./masking/masker.js";
@@ -34,6 +35,7 @@ export { InMemoryAuditSink } from "./audit/auditLogger.js";
 export { detectWithRegex } from "./detectors/regex/regexDetector.js";
 export { detectWithNer, warmupNer } from "./detectors/ner/nerDetector.js";
 export { detectWithDictionary } from "./detectors/dictionary/dictionaryDetector.js";
+export { detectObfuscated } from "./detectors/obfuscation/obfuscationDetector.js";
 export { createStreamingReconstructor } from "./reconstruction/streamingReconstructor.js";
 export type { StreamingReconstructor } from "./reconstruction/streamingReconstructor.js";
 
@@ -211,8 +213,9 @@ export class Sanitizer {
   async sanitize(text: string, requestId: string = randomUUID()): Promise<SanitizeResult> {
     const dictionaryEntities = detectWithDictionary(text, this.knownEntities);
     const regexEntities = detectWithRegex(text, this.customRules);
+    const obfuscatedEntities = detectObfuscated(text);
     const nerEntities = this.enableNer ? await detectWithNer(text) : [];
-    const merged = mergeEntities(dictionaryEntities, regexEntities, nerEntities);
+    const merged = mergeEntities(dictionaryEntities, regexEntities, obfuscatedEntities, nerEntities);
     const entities = this.propagateNamedEntities(text, merged);
 
     // If this requestId already has vault entries (e.g. earlier turns in the
