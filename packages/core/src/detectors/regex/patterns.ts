@@ -146,6 +146,38 @@ const PII_RULES: RegexRule[] = [
       /[A-Za-z0-9._%+-]+(?:(?:\s*\[dot\]\s*|\s*\(dot\)\s*|\.)[A-Za-z0-9._%+-]+)*(?:\s*\[at\]\s*|\s*\(at\)\s*|@)[A-Za-z0-9-]+(?:(?:\s*\[dot\]\s*|\s*\(dot\)\s*|\.)[A-Za-z0-9-]+)+/gi,
   },
   {
+    // HL7 v2 XPN person name: "LAST^FIRST^MIDDLE" of alphabetic components,
+    // e.g. "PENDELTON^ARTHUR^J". The leading "|" lookbehind anchors it to the
+    // start of an HL7 field (where name fields live), so mid-field address
+    // components like "TER^APT" or "SPRINGFIELD^IL" aren't mistaken for names.
+    // Numeric codes ("ADT^A01") can't match (components are letters only).
+    type: EntityType.PERSON_NAME,
+    pattern: /(?<=\|)[A-Za-z][A-Za-z'-]+\^[A-Za-z][A-Za-z'-]+(?:\^[A-Za-z][A-Za-z'-]*)*/g,
+  },
+  {
+    // HL7 address city component: the alphabetic token sitting immediately
+    // before "^<ST>^<ZIP>", e.g. the "SPRINGFIELD" in
+    // "...^SPRINGFIELD^IL^62704".
+    type: EntityType.LOCATION,
+    pattern: /(?<=\^)[A-Za-z][A-Za-z .'-]+(?=\^[A-Z]{2}\^\d{5})/g,
+  },
+  {
+    // FHIR JSON city value: "city": "Springfield".
+    type: EntityType.LOCATION,
+    pattern: /(?<="city"\s*:\s*")[A-Za-z][A-Za-z .'-]*/g,
+  },
+  {
+    // FHIR JSON name value: "family": "Pendelton". Masks only the quoted value.
+    type: EntityType.PERSON_NAME,
+    pattern: /(?<="family"\s*:\s*")[A-Za-z][A-Za-z '-]*/g,
+  },
+  {
+    // FHIR JSON given-name array elements: "given": ["Arthur", "James"].
+    // The variable-length lookbehind lets each element match in turn.
+    type: EntityType.PERSON_NAME,
+    pattern: /(?<="given"\s*:\s*\[(?:\s*"[^"]*"\s*,)*\s*")[A-Za-z][A-Za-z '-]*/g,
+  },
+  {
     // US SSN: 123-45-6789, 123 45 6789, 123456789
     type: EntityType.SSN,
     pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
@@ -241,6 +273,12 @@ const PII_RULES: RegexRule[] = [
     pattern: /\b(?:Driver'?s?\s?License|Driving\s?Licen[cs]e|DL)\s?(?:\([^)]*\))?\s*(?:is\s+|[:\s#=\-]+)\s?[A-Z0-9-]{5,16}\b/gi,
   },
   {
+    // Unlabeled driver's-license-style identifier: a leading letter followed
+    // by dash-grouped digits, e.g. "P530-0194-8210".
+    type: EntityType.DRIVERS_LICENSE,
+    pattern: /\b[A-Z]\d{3}-\d{4}-\d{4}\b/g,
+  },
+  {
     // Labeled date of birth: "DOB: 01/02/1990", "Date of Birth: 1990-01-02"
     type: EntityType.DATE_OF_BIRTH,
     pattern: /\b(?:DOB|Date\s?of\s?Birth|Birth\s?date)\s*(?:is\s+|[:\s]+)\s?(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]+\s\d{1,2},?\s\d{4})\b/gi,
@@ -252,7 +290,14 @@ const PII_RULES: RegexRule[] = [
     // longer matches and win over this on overlap.
     type: EntityType.DATE,
     pattern:
-      /\b(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/gi,
+      /\b(?:(?<![.\d])\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}(?![.\d])|\d{4}-\d{2}-\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/gi,
+  },
+  {
+    // Compact HL7-style date (YYYYMMDD) or timestamp (YYYYMMDDHHMM[SS]),
+    // e.g. "19480412", "20260101", "202611241430". Year constrained to
+    // 19xx/20xx and valid month/day so ordinary long digit runs don't match.
+    type: EntityType.DATE,
+    pattern: /\b(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?:(?:[01]\d|2[0-3])[0-5]\d(?:[0-5]\d)?)?\b/g,
   },
   {
     // Labeled username/handle: "username: jdoe123", "@jane_doe"
@@ -314,7 +359,7 @@ const PII_RULES: RegexRule[] = [
     // "City, ST 62704" / "Springfield, 62704" geographic tail. The 4-digit
     // year case (", 2026") can't match \d{5}, avoiding that false positive.
     type: EntityType.ZIP_CODE,
-    pattern: /\b(?:ZIP(?:\s+Code)?|Postal\s+Code)\s*(?:is\s+|[:\s=]+)\s*\d{5}(?:-\d{4})?\b|(?<=,\s{1,3})(?:[A-Z]{2}\s+)?\d{5}(?:-\d{4})?\b/gi,
+    pattern: /\b(?:ZIP(?:\s+Code)?|Postal\s+Code)\s*(?:is\s+|[:\s=]+)\s*\d{5}(?:-\d{4})?\b|(?<=,\s{1,3})(?:[A-Z]{2}\s+)?\d{5}(?:-\d{4})?\b|(?<=\^[A-Z]{2}\^)\d{5}(?:-\d{4})?\b|(?<="postalCode"\s*:\s*")\d{5}(?:-\d{4})?/gi,
   },
   {
     // Labeled vehicle license plate: "Plate: 7XYZ123", "License Plate Number: ABC-1234"
@@ -328,9 +373,11 @@ const PII_RULES: RegexRule[] = [
 // ---------------------------------------------------------------------------
 const PHI_RULES: RegexRule[] = [
   {
-    // ICD-10-CM: letter + 2 digits, optional decimal + up to 4 alphanumeric
+    // ICD-10-CM: letter + 2 digits, optional decimal + up to 4 alphanumeric.
+    // Negative lookbehind for "^" skips HL7 component codes (e.g. the "A01"
+    // in "ADT^A01"), which share the shape but aren't diagnoses.
     type: EntityType.ICD_CODE,
-    pattern: /\b[A-TV-Z]\d{2}(?:\.\d{1,4})?\b/g,
+    pattern: /\b(?<!\^)[A-TV-Z]\d{2}(?:\.\d{1,4})?\b/g,
   },
   {
     // Age of 90+ (HIPAA Safe Harbor). Labeled ("age 93", "aged 93") or
@@ -374,7 +421,8 @@ const PHI_RULES: RegexRule[] = [
     // Allows an optional alphanumeric suffix (e.g. "-A") so facility-specific
     // check characters aren't left dangling.
     type: EntityType.MEDICAL_RECORD_NUMBER,
-    pattern: /\bMRN\s*(?:is\s+|[:\s#=\-]+)\s?\d{5,10}(?:-[A-Za-z0-9]{1,4})?\b/gi,
+    pattern:
+      /\bMRN\s*(?:is\s+|[:\s#=\-]+)\s?\d{5,10}(?:-[A-Za-z0-9]{1,4})?\b|\b[0-9][A-Za-z0-9-]{4,15}(?=\^+(?:MRN|MR)\b)/gi,
   },
   {
     // Medicare Beneficiary Identifier (MBI): 11 chars in the pattern
@@ -391,11 +439,11 @@ const PHI_RULES: RegexRule[] = [
     pattern: /\bMBI\s*(?:is\s+|[:\s#=\-]+)\s*[1-9][\s-]*[A-Za-z][\s-]*[A-Za-z0-9][\s-]*\d[\s-]*[A-Za-z][\s-]*[A-Za-z0-9][\s-]*\d[\s-]*[A-Za-z][\s-]*[A-Za-z][\s-]*\d[\s-]*\d\b/gi,
   },
   {
-    // Alphanumeric member/policy id: a single leading letter + 8-11 digits
-    // (e.g. "W204819204") that the labeled rule misses when it trails another
-    // value after a slash ("GRP-9921 / W204819204").
+    // Alphanumeric member/policy id: 1-4 leading letters + 8-12 digits
+    // (e.g. "W204819204", "XYZ987654321") that the labeled rule misses when it
+    // stands alone (end of an HL7 IN1 segment) or trails a slash.
     type: EntityType.HEALTH_INSURANCE_ID,
-    pattern: /\b[A-Z]\d{8,11}\b/g,
+    pattern: /\b[A-Z]{1,4}\d{8,12}\b/g,
   },
   {
     // Insurance group number in the common "GRP-####" form, matched without
@@ -434,6 +482,12 @@ const PHI_RULES: RegexRule[] = [
     // Labeled patient identifier: "Patient ID: PT-2024-88213", "Patient No: 12345"
     type: EntityType.PATIENT_ID,
     pattern: /\bPatient\s?(?:ID|No\.?|Number|#)\s*(?:is\s+|[:\s#=\-]+)\s?[A-Z0-9-]{4,15}\b/gi,
+  },
+  {
+    // FHIR resource id value, e.g. "id": "pat-apendelton-48" - often embeds a
+    // name fragment, so mask the quoted value.
+    type: EntityType.PATIENT_ID,
+    pattern: /(?<="id"\s*:\s*")[A-Za-z0-9._-]+/g,
   },
   {
     // Labeled service-related dates (HIPAA "dates related to an individual")

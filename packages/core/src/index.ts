@@ -168,25 +168,35 @@ export class Sanitizer {
         knownFromDetections.push({ value, type: e.type as KnownEntity["type"] });
       }
       if (e.type === EntityType.PERSON_NAME) {
-        const tokens = value.split(/\s+/).filter((t) => /[A-Za-z]/.test(t));
-        if (tokens.length >= 2) {
-          const last = tokens[tokens.length - 1].replace(/[^A-Za-z'’.-]/g, "");
-          if (last.length >= 4) surnames.add(last);
-        }
+        // Split on spaces AND HL7/JSON delimiters (^ , ") so e.g.
+        // "PENDELTON^ARTHUR^J" yields PENDELTON / ARTHUR, and collect each
+        // substantial part as a name token to sweep across other formats.
+        const tokens = value.split(/[\s^,"]+/).filter((t) => t.length >= 4 && /^[A-Za-z'’.-]+$/.test(t));
+        for (const t of tokens) surnames.add(t);
       }
     }
 
     const extraOccurrences =
       knownFromDetections.length > 0 ? detectWithDictionary(text, knownFromDetections) : [];
 
-    const surnameHits: DetectedEntity[] = [];
+    const nameHits: DetectedEntity[] = [];
     for (const surname of surnames) {
-      const escaped = surname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      // Optional up-to-two leading Capitalized tokens (the given name[s]).
-      const re = new RegExp(`\\b(?:[A-Z][A-Za-z'’.-]+\\s+){0,2}${escaped}\\b`, "g");
+      // Match the surname case-insensitively (so an upper-case HL7 token
+      // "PENDELTON" also hits the mixed-case FHIR "Pendelton") via a per-char
+      // class, while keeping the optional leading given-name tokens strictly
+      // upper/title-case - otherwise (with a global /i) the leading group would
+      // swallow lower-case prose like "by" in "by Marcus Pendelton".
+      const ciSurname = surname
+        .split("")
+        .map((c) => (/[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+        .join("");
+      const re = new RegExp(`\\b(?:[A-Z][A-Za-z'’.-]+[\\s^]+){0,2}${ciSurname}\\b`, "g");
       for (const m of text.matchAll(re)) {
         if (m.index === undefined) continue;
-        surnameHits.push({
+        // Skip lower-case prose usages (e.g. the word "will"); real names in
+        // these records are upper- or title-cased.
+        if (!/[A-Z]/.test(m[0][0])) continue;
+        nameHits.push({
           type: EntityType.PERSON_NAME,
           category: ENTITY_CATEGORY[EntityType.PERSON_NAME],
           value: m[0],
@@ -198,8 +208,8 @@ export class Sanitizer {
       }
     }
 
-    if (extraOccurrences.length === 0 && surnameHits.length === 0) return entities;
-    return mergeEntities(entities, extraOccurrences, surnameHits);
+    if (extraOccurrences.length === 0 && nameHits.length === 0) return entities;
+    return mergeEntities(entities, extraOccurrences, nameHits);
   }
 
   /**
